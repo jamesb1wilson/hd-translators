@@ -1,0 +1,76 @@
+# HD Translators — Cursor Rules
+
+## Identity
+
+You are building the HD Translators data extraction backend for a non-coding operator. The operator (Dzava) understands architecture and logic but does not read, write, or edit code directly. All code changes happen through you. The operator validates by running the application and checking outputs against reference data.
+
+## Behavioral Constraints
+
+### Before Writing Code
+
+1. **Read system.md first.** Every session begins by reviewing the system specification. If system.md has been updated since your last session, re-read it completely.
+2. **Read docs/decisions.md.** Recover the history of what has been built and why.
+3. **State your plan before executing.** Tell the operator what you intend to build, which files you will create or modify, and what the expected outcome is. Wait for confirmation.
+4. **One vertical slice at a time.** Never build more than one feature per session. Complete it, test it, document it, then stop.
+
+### While Writing Code
+
+5. **TypeScript strict mode only.** No `any` types. No type assertions unless absolutely necessary and explained.
+6. **No new dependencies without approval.** Before adding any npm package, explain what it does, why it's needed, and what alternatives exist. Wait for confirmation.
+7. **No file creation outside the defined folder structure.** If you need a new file, explain where it should go and why. Reference system.md.
+8. **Never delete or overwrite existing working code.** If refactoring, explain what changes and why. Make changes incremental.
+9. **Import paths use `@/` alias.** Always import from `@/lib/`, `@/components/`, etc. Never use relative paths like `../../`.
+10. **No console.log in production code.** Use proper error handling. Throw typed errors.
+
+### After Writing Code
+
+11. **Write the test.** After completing a feature, write a test that verifies it works correctly with known-good input data.
+12. **Update docs/decisions.md.** Document what was built, why, and what edge cases exist.
+13. **Summarize for the operator.** After every change, provide a plain-English summary: what changed, what works now, what to test next.
+
+## Architecture Rules
+
+### Database (Supabase)
+
+- Maximum 3 tables: `users`, `orders`, `hd_profiles`
+- All tables have Row Level Security enabled
+- No complex joins. One level maximum.
+- Use Supabase client library. No raw SQL in application code.
+
+### API Routes
+
+- All computation happens in Next.js API routes or Supabase Edge Functions
+- No client-side computation of HD data
+- API routes return typed JSON matching the schemas in `lib/hd-engine/types.ts`
+
+### Error Handling
+
+- All errors are typed and descriptive
+- API routes return proper HTTP status codes
+- Client displays user-friendly error messages, not stack traces
+- Never swallow errors silently
+
+### Security
+
+- No API keys in client-side code
+- All secrets in environment variables
+- Stripe webhooks verified with signing secret
+- Input sanitization on all user-provided data
+
+## Code Style
+
+- Functions: named exports, no default exports
+- Components: functional components with explicit prop types
+- Naming: camelCase for variables/functions, PascalCase for components/types
+- Comments: only when the "why" is not obvious from the code
+- Maximum file length: 200 lines. Split if longer.
+
+## What You Must Never Do
+
+- Never add features not specified in system.md
+- Never change the folder structure without updating system.md
+- Never use JavaScript (only TypeScript)
+- Never install packages globally
+- Never modify .env files without telling the operator
+- Never assume the operator can read code — explain everything in plain English
+- Never rationalize incorrect output — if the HD calculation is wrong, say so and fix it
