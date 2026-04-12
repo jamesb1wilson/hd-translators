@@ -12,10 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^9.1.0",
     "luxon": "^3.7.2",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "stripe": "^22.0.1",
     "swisseph": "0.5.17"
   },
   "devDependencies": {

@@ -84,3 +84,42 @@ HD engine + API wrapper + validation + tests remain **well under** the 5,000-lin
 - Supabase (or similar) for stored profiles.  
 - Stripe / paywall on `/api/extract`.  
 - Rate limiting per key or user.
+
+---
+
+## Session 3a — Stripe Checkout (payment gating)
+
+### What was built
+
+- **Stripe Checkout (redirect mode)** via `src/lib/stripe.ts`: singleton Stripe client, `createCheckoutSession(birthData, orderId)` with inline `price_data` ($9.00 USD), metadata `birthData` (JSON string) and `orderId`, `success_url` / `cancel_url` using `NEXT_PUBLIC_BASE_URL`.
+- **`POST /api/checkout`** (`src/app/api/checkout/route.ts`): same body and validation as `/api/extract` (`validateExtractRequest`), UUID `orderId`, returns `{ url, orderId }`; **400** validation/JSON errors, **500** Stripe failures.
+- **`POST /api/webhook`** (`src/app/api/webhook/route.ts`): raw body via `request.text()`, `stripe.webhooks.constructEvent` with `STRIPE_WEBHOOK_SECRET`; handles **`checkout.session.completed`** only — parses metadata, calls `extractProfile`, logs `Profile extracted:` + JSON; other events **200**; bad signature **400**.
+- **Landing page** (`src/app/page.tsx`): minimal birth-data form (flat fields → nested `birthLocation`), submit → `POST /api/checkout` → browser redirect to Stripe URL.
+- **Result page** (`src/app/result/[orderId]/page.tsx`): placeholder copy + displays `orderId` from the route (no profile UI until Session 3b / Supabase).
+- **Dependencies**: `stripe`, `@stripe/stripe-js` (publishable key reserved for future client use).
+- **Env**: `.env.local` placeholders for Stripe keys and `NEXT_PUBLIC_BASE_URL`; `.gitignore` includes `.env.local`.
+
+### Why `price_data` inline (no Stripe Product/Price IDs)
+
+- Avoids dashboard setup and extra IDs while the flow is being wired; Session 3b can migrate to a Product/Price in Stripe for reporting and reuse.
+
+### Why `orderId` is generated at checkout, not in the webhook
+
+- The success redirect can be `/result/{orderId}` before payment completes; the same id is stored in session metadata for the webhook and later persistence.
+
+### App Router note: `bodyParser: false`
+
+- Next.js 14 App Router **rejects** the Pages API pattern `export const config = { api: { bodyParser: false } }` (deprecated error at build). Raw bytes for Stripe verification are read with **`await request.text()`** on the `NextRequest`, which is the supported approach (no automatic JSON parse unless `request.json()` is called).
+
+### Edge cases
+
+- **Webhook signature failure** → **400** (Stripe retry behavior unchanged).
+- **Stripe metadata**: **500 characters per metadata value**; `birthData` JSON for normal inputs is well under this limit.
+
+### Verification (this environment)
+
+- **`stripe listen` / `stripe trigger` were not run** — Stripe CLI is not available on the operator machine. End-to-end webhook delivery will be confirmed in **Session 3b** using the Stripe Dashboard’s built-in test webhook sender (or an equivalent dashboard-driven test) against the deployed `/api/webhook` URL.
+
+### Not in this session
+
+- Supabase, email delivery, modifying `calculator.ts` or `/api/extract`.

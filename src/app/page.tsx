@@ -1,37 +1,118 @@
+'use client';
+
+import { useState, FormEvent } from 'react';
+
 export default function HomePage() {
-  return (
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-4">HD Translators API</h1>
-      <p className="text-lg mb-4">
-        Human Design Profile Extraction API endpoint.
-      </p>
-      
-      <div className="bg-gray-100 p-4 rounded-lg">
-        <h2 className="text-xl font-semibold mb-2">API Endpoint</h2>
-        <p className="font-mono text-sm mb-2">
-          POST /api/extract
-        </p>
-        <p className="text-sm text-gray-600">
-          Extract Human Design profile from birth data.
-        </p>
-      </div>
-      
-      <div className="mt-6">
-        <h3 className="text-lg font-semibold mb-2">Usage Example</h3>
-        <pre className="bg-black text-green-400 p-4 rounded text-sm overflow-x-auto">
-{`curl -X POST http://localhost:3000/api/extract \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "birthDate": "1985-07-31",
-    "birthTime": "04:33:00",
-    "birthLocation": {
-      "latitude": -19.8,
-      "longitude": 32.86667,
-      "timezone": "Africa/Harare"
+  const [birthDate, setBirthDate] = useState('');
+  const [birthTime, setBirthTime] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [timezone, setTimezone] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          birthDate,
+          birthTime,
+          birthLocation: {
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            timezone,
+          },
+        }),
+      });
+      const data = (await res.json()) as { url?: string; message?: string };
+      if (!res.ok) {
+        setError(data.message ?? 'Checkout failed');
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setError('No checkout URL returned');
+    } catch {
+      setError('Network error');
+    } finally {
+      setSubmitting(false);
     }
-  }'`}
-        </pre>
-      </div>
+  }
+
+  return (
+    <main className="container mx-auto px-4 py-8 max-w-md">
+      <h1 className="text-2xl font-semibold mb-6">HD Translators</h1>
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <label className="flex flex-col gap-1">
+          <span>Birth date (YYYY-MM-DD)</span>
+          <input
+            className="border rounded px-3 py-2"
+            name="birthDate"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span>Birth time (HH:MM:SS)</span>
+          <input
+            className="border rounded px-3 py-2"
+            name="birthTime"
+            value={birthTime}
+            onChange={(e) => setBirthTime(e.target.value)}
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span>Latitude</span>
+          <input
+            className="border rounded px-3 py-2"
+            name="latitude"
+            type="text"
+            inputMode="decimal"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span>Longitude</span>
+          <input
+            className="border rounded px-3 py-2"
+            name="longitude"
+            type="text"
+            inputMode="decimal"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span>Timezone (IANA)</span>
+          <input
+            className="border rounded px-3 py-2"
+            name="timezone"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            required
+          />
+        </label>
+        {error ? <p className="text-red-600 text-sm">{error}</p> : null}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded bg-black text-white px-4 py-2 disabled:opacity-50"
+        >
+          {submitting ? 'Redirecting…' : 'Get My Reading — $9'}
+        </button>
+      </form>
     </main>
   );
 }
