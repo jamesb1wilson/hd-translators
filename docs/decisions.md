@@ -123,3 +123,46 @@ HD engine + API wrapper + validation + tests remain **well under** the 5,000-lin
 ### Not in this session
 
 - Supabase, email delivery, modifying `calculator.ts` or `/api/extract`.
+
+---
+
+## Session 3b — Supabase storage and Auth (webhook + result page)
+
+### What was built
+
+- **Schema** (`supabase/migrations/001_initial_schema.sql`): three tables only — `users` (FK to `auth.users`), `orders`, `hd_profiles` — plus RLS and `SELECT` policies scoped to `auth.uid()` for each table.
+- **Clients** (`src/lib/supabase.ts`): `supabase` (anon / `NEXT_PUBLIC_*`) and `supabaseAdmin` (service role / `SUPABASE_SERVICE_ROLE_KEY`). Dependencies: `@supabase/supabase-js`, `@supabase/ssr` (result page only, for cookie-aware anon sessions).
+- **Webhook** (`src/app/api/webhook/route.ts`): On `checkout.session.completed`, reads `birthData` and `orderId` from metadata and `customer_details.email`, runs `extractProfile()`, then with `supabaseAdmin` upserts `users`, upserts `orders` (`status: 'complete'`), replaces any prior `hd_profiles` row for that `order_id` and inserts the new profile JSON, then `auth.admin.generateLink({ type: 'magiclink', email })` and logs `properties.action_link` to the console (email sending deferred).
+- **Result page** (`src/app/result/[orderId]/page.tsx`): Server component; `createServerClient` + anon key; loads `hd_profiles` by `order_id` and shows a short summary (type, authority, profile, defined centers) or the “being prepared” message when no row or RLS yields no access.
+- **Env** (`.env.local`): placeholders for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (and non-empty Stripe placeholders so `next build` can load routes that import `stripe.ts`).
+
+### Why the service role key is only used in the webhook
+
+- Stripe’s server handler must write orders and profiles **without** an end-user JWT. Row Level Security is written for authenticated clients (`auth.uid()`). The **service role** client bypasses RLS so the webhook can insert/upsert on behalf of the paying customer after payment. The **anon** key is used for normal app reads (e.g. the result page) so unprivileged access stays constrained by RLS when a session exists.
+
+### Why the magic link is logged, not emailed
+
+- Outbound email (SMTP, Resend, etc.) is not configured in this session; logging the generated link matches the “custom email provider” workflow until an email integration is added.
+
+### Why the user upsert / lookup pattern
+
+- The same customer may complete checkout more than once; `public.users` and Auth must resolve **one** user id per email. The implementation upserts `users` on `id` and, when creating a new Auth user fails because the email already exists, falls back to **paginated** `auth.admin.listUsers` to find the id. (**Note:** `auth.admin.getUserByEmail()` is **not** implemented in the installed `@supabase/auth-js` / `GoTrueAdminApi`; the task’s name was mapped to this behavior. If Supabase adds a direct API later, the fallback can be simplified.)
+
+### Auth API caveat (operator / maintainer)
+
+- If `listUsers` pagination becomes too heavy at scale, prefer a DB trigger or a supported Admin API for email lookup once available.
+
+### RLS and the result page
+
+- Policies allow `SELECT` on `hd_profiles` only when `auth.uid() = user_id`. Visitors **without** a Supabase session (e.g. immediately after Stripe redirect, before opening the magic link) will typically see the “being prepared” message until they authenticate; after the magic link establishes a session, the same URL can show the summary.
+
+### Verification (this environment)
+
+- **`npm run typecheck`** — passed.
+- **`npm run build`** — passed (with `.env.local` containing non-empty Stripe placeholders so `stripe.ts` can load during the build).
+
+### Operator follow-up (manual)
+
+- Run `001_initial_schema.sql` in the Supabase SQL Editor.
+- Set real Supabase and Stripe values in `.env.local`.
+- Test the webhook from the Stripe Dashboard (e.g. tunnel with `npx localtunnel --port 3000` if localhost is not public).
